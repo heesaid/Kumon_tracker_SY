@@ -1,0 +1,248 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>구몬한자 주간 트래커</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js">
+let goalLocked = false;
+const PASSWORD = "0707";
+
+function confirmGoals() {
+  goalLocked = true;
+  document.getElementById("editPasswordSection").style.display = "block";
+  renderGoalTable();
+}
+
+function unlockGoals() {
+  const input = document.getElementById("editPassword").value;
+  if (input === PASSWORD) {
+    goalLocked = false;
+    document.getElementById("editPasswordSection").style.display = "none";
+    renderGoalTable();
+  } else {
+    alert("비밀번호가 틀렸습니다.");
+  }
+}
+
+</script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    h2 { margin-top: 40px; }
+    table { border-collapse: collapse; width: 100%; max-width: 700px; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    input[type="number"], input[type="password"] { width: 80px; }
+    #goalSumDisplay { margin-top: 10px; font-weight: bold; }
+    #warning {
+      display: none;
+      color: red;
+      font-size: 1.5em;
+      font-weight: bold;
+      animation: blink 1s infinite;
+      margin-top: 20px;
+      text-align: center;
+    }
+    @keyframes blink {
+      0% { opacity: 1; }
+      50% { opacity: 0; }
+      100% { opacity: 1; }
+    }
+    #chart-container { margin-top: 30px; }
+  </style>
+</head>
+<body>
+
+<h1 id="weekNumberDisplay" data-week="15">📘 구몬한자 주간 트래커 (Week 15, 목표 총합 20장)</h1>
+
+
+<h2>🎯 날짜별 목표 입력</h2>
+<div id="confirmSection">
+  <button onclick="confirmGoals()">목표 확정</button>
+  <div id="editPasswordSection" style="display: none; margin-top: 10px;">
+    비밀번호: <input type="password" id="editPassword">
+    <button onclick="unlockGoals()">수정 허용</button>
+  </div>
+</div>
+
+<table id="goalTable">
+  <thead>
+    <tr><th>날짜</th><th>목표량</th><th>실제 학습량</th></tr>
+  </thead>
+  <tbody></tbody>
+</table>
+<div id="goalSumDisplay">총 목표량: 0장 / 남은: 20장</div>
+
+<h2>📥 학습량 입력</h2>
+날짜: <input type="date" id="studyDate">
+학습량(장): <input type="number" id="studyAmount" min="0">
+<button onclick="addStudy()">저장</button>
+<button onclick="confirmWeek()">이번 주차 학습량 입력 확정</button>
+
+<div id="chart-container">
+  <canvas id="taskChart"></canvas>
+</div>
+
+<div id="warning">⚠️ 밀리고 있어요, 분발하세요!</div>
+
+<h2>📊 완료된 주차 요약</h2>
+<table id="summaryTable">
+  <thead>
+    <tr><th>주차</th><th>기간</th><th>완료율</th></tr>
+  </thead>
+  <tbody id="summaryBody"></tbody>
+</table>
+
+<script>
+const weeklyTarget = 20;
+let goalData = {};
+let actualData = {};
+
+function getWeekDates() {
+  const today = new Date();
+  const day = today.getDay();
+  const diffToThursday = (day >= 4) ? day - 4 : 7 - (4 - day);
+  const startDate = new Date(today);
+  startDate.setDate(today.getDate() - diffToThursday);
+  const dates = [];
+  for (let i = 0; i < 8; i++) {
+    const d = new Date(startDate);
+    d.setDate(startDate.getDate() + i);
+    dates.push(d.toISOString().split("T")[0]);
+  }
+  return dates;
+}
+
+function renderGoalTable() {
+  const tbody = document.querySelector("#goalTable tbody");
+  tbody.innerHTML = "";
+  const dates = getWeekDates();
+  dates.forEach(date => {
+    const row = document.createElement("tr");
+    const tdDate = document.createElement("td");
+    tdDate.textContent = date;
+    const tdGoal = document.createElement("td");
+    const inputGoal = document.createElement("input");
+    inputGoal.type = "number";
+    inputGoal.min = 0;
+    inputGoal.value = goalData[date] || "";
+    if (goalLocked) inputGoal.disabled = true;
+    inputGoal.oninput = () => {
+      goalData[date] = parseInt(inputGoal.value) || 0;
+      updateGoalSum();
+    };
+    tdGoal.appendChild(inputGoal);
+    const tdActual = document.createElement("td");
+    tdActual.textContent = actualData[date] || 0;
+    row.appendChild(tdDate);
+    row.appendChild(tdGoal);
+    row.appendChild(tdActual);
+    tbody.appendChild(row);
+  });
+  updateGoalSum();
+}
+
+function updateGoalSum() {
+  const sum = Object.values(goalData).reduce((a, b) => a + b, 0);
+  const display = document.getElementById("goalSumDisplay");
+  display.textContent = `총 목표량: ${sum}장 / 남은: ${weeklyTarget - sum}장`;
+}
+
+function addStudy() {
+  const date = document.getElementById("studyDate").value;
+  const amount = parseInt(document.getElementById("studyAmount").value);
+  if (!date || isNaN(amount)) {
+    alert("날짜와 학습량을 모두 입력하세요.");
+    return;
+  }
+  actualData[date] = amount;
+  renderGoalTable();
+  updateChart();
+}
+
+function confirmWeek() {
+  const labels = getWeekDates();
+  const goal = labels.map(date => goalData[date] || 0);
+  const actual = labels.map(date => actualData[date] || 0);
+  let completed = 0;
+  for (let i = 0; i < labels.length; i++) {
+    completed += Math.min(actual[i], goal[i]);
+  }
+  const percent = Math.round((completed / 20) * 100);
+  const currentWeek = parseInt(document.getElementById("weekNumberDisplay").dataset.week);
+  const period = labels[0].replace(/-/g, ".") + " ~ " + labels[labels.length - 1].replace(/-/g, ".");
+
+  const row = document.createElement("tr");
+  row.innerHTML = `<td>Week ${currentWeek}</td><td>${period}</td><td>${percent}%</td>`;
+  const summaryBody = document.getElementById("summaryBody");
+  summaryBody.appendChild(row);
+
+  // Move to next week
+  const nextWeek = currentWeek + 1;
+  document.getElementById("weekNumberDisplay").dataset.week = nextWeek;
+  document.getElementById("weekNumberDisplay").textContent = `📘 구몬한자 주간 트래커 (Week ${nextWeek}, 목표 총합 20장)`;
+  goalData = {};
+  actualData = {};
+  renderGoalTable();
+  updateChart();
+}
+
+function updateChart() {
+  const labels = getWeekDates();
+  const actual = labels.map(date => actualData[date] || 0);
+  const goal = labels.map(date => goalData[date] || 0);
+  const under = goal.map((g, i) => Math.max(g - actual[i], 0));
+  const over = actual.map((a, i) => Math.max(a - goal[i], 0));
+  const regular = actual.map((a, i) => Math.min(a, goal[i]));
+  const ctx = document.getElementById("taskChart").getContext("2d");
+  if (window.taskChartInstance) {
+    window.taskChartInstance.destroy();
+  }
+  window.taskChartInstance = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: labels,
+      datasets: [
+        { label: "정상 학습량", data: regular, backgroundColor: "#4CAF50", stack: 'stack1' },
+        { label: "미달량", data: under, backgroundColor: "#FF6F61", stack: 'stack1' },
+        { label: "초과 학습량", data: over, backgroundColor: "#FFD700", stack: 'stack1' }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: { stacked: true, title: { display: true, text: "날짜" } },
+        y: { stacked: true, beginAtZero: true, title: { display: true, text: "장 수" } }
+      }
+    }
+  });
+}
+
+window.onload = () => {
+  renderGoalTable();
+  updateChart();
+};
+
+let goalLocked = false;
+const PASSWORD = "0707";
+
+function confirmGoals() {
+  goalLocked = true;
+  document.getElementById("editPasswordSection").style.display = "block";
+  renderGoalTable();
+}
+
+function unlockGoals() {
+  const input = document.getElementById("editPassword").value;
+  if (input === PASSWORD) {
+    goalLocked = false;
+    document.getElementById("editPasswordSection").style.display = "none";
+    renderGoalTable();
+  } else {
+    alert("비밀번호가 틀렸습니다.");
+  }
+}
+
+</script>
+
+</body>
+</html>
